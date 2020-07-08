@@ -58,6 +58,7 @@ contract("ChanBoards", function () {
                 boardID: "1",
                 threadID: "1",
                 postID: "1",
+                ordinal: "1",
                 multihash: "0x000100"
             }
         );
@@ -85,6 +86,7 @@ contract("ChanBoards", function () {
                 boardID: "1",
                 threadID: "1",
                 postID: "2",
+                ordinal: "2",
                 multihash: "0x000100"
             }
         );

@@ -310,14 +310,14 @@ contract ChanBoards {
     event BoardCreated(address indexed creator, uint32 boardID, bytes3 code, bytes multihash);
 
     /**
-     * An event which is emitted when a post is published. If the postID and threadID are the same then the post
-     * is the start of a thread.
+     * An event which is emitted when a post is published to a thread.
      */
     event PostPublished(
         address indexed author,
         uint32  indexed boardID,
         uint32  indexed threadID,
         uint32          postID,
+        uint16          ordinal,
         bytes           multihash
     );
 
@@ -361,12 +361,12 @@ contract ChanBoards {
      * All of the thread posts mapped first by board, then by the post which is the head of the thread, and finally by
      * order at which the posts were appended.
      */
-    mapping(uint32 => mapping(uint32 => mapping(uint32 => uint32))) public boardThreadPosts;
+    mapping(uint32 => mapping(uint32 => mapping(uint16 => uint32))) public boardThreadPosts;
 
     /**
      * The number of posts that the threads in a board currently has.
      */
-    mapping(uint32 => mapping(uint32 => uint32)) public boardThreadPostCount;
+    mapping(uint32 => mapping(uint32 => uint16)) public boardThreadPostCount;
 
     /**
      * Creates a new board.
@@ -392,8 +392,8 @@ contract ChanBoards {
     }
 
     /**
-     * Publishes a post. If the parentID is set to NULL then the post will be the first post in a thread, otherwise the
-     * post will be appended to a thread. The boardID can be set to NULL if publishing a post to a thread.
+     * Publishes a post. If the threadID is set to NULL then the post will be the first post in a newly created thread,
+     * otherwise the post will be appended to a thread.
      */
     function publishPost(uint32 boardID, uint32 threadID, bytes memory multihash)
         public
@@ -402,7 +402,7 @@ contract ChanBoards {
         require(boardID > 0 && boardID <= boardCount, "Board does not exist");
 
         if (threadID != NULL) {
-            require(boardThreadPostCount[boardID][threadID] > 0, "Specified post is not a thread");
+            require(threadID > 0 && threadID <= boardThreadCounts[boardID], "Thread does not exist");
         }
 
         address author = msg.sender;
@@ -422,11 +422,11 @@ contract ChanBoards {
         boardPostCount[boardID] += 1;
 
         // Append the post to the thread.
-        uint32 threadPostID = boardThreadPostCount[boardID][threadID] + 1;
-        boardThreadPosts[boardID][threadID][threadPostID] = postID;
+        uint16 ordinal = boardThreadPostCount[boardID][threadID] + 1;
+        boardThreadPosts[boardID][threadID][ordinal] = postID;
         boardThreadPostCount[boardID][threadID] += 1;
 
-        emit PostPublished(author, boardID, threadID, postID, multihash);
+        emit PostPublished(author, boardID, threadID, postID, ordinal, multihash);
 
         return postID;
     }
@@ -483,14 +483,14 @@ contract ChanBoards {
     /**
      * Lists posts that belong to a board thread.
      */
-    function listThreadPosts(uint32 boardID, uint32 threadID, uint32 cursor, uint32 limit)
+    function listThreadPosts(uint32 boardID, uint32 threadID, uint16 cursor, uint16 limit)
         public
         view
-        returns (Post[] memory items, uint32 newCursor)
+        returns (Post[] memory items, uint16 newCursor)
     {
         require(cursor > 0, "Bad cursor");
         require(boardID > 0 && boardID <= boardCount, "Board does not exist");
-        require(boardThreadPostCount[boardID][threadID] > 0, "Thread does not exist");
+        require(threadID > 0 && threadID <= boardThreadCounts[boardID], "Thread does not exist");
         require(limit > 0, "Bad limit");
 
         if (cursor + limit - 1 > boardThreadPostCount[boardID][threadID]) {
@@ -499,7 +499,7 @@ contract ChanBoards {
 
         items = new Post[](limit);
 
-        for (uint32 i = 0; i < limit; i++) {
+        for (uint16 i = 0; i < limit; i++) {
             items[i] = boardPosts[boardID][boardThreadPosts[boardID][threadID][cursor + i]];
         }
 
