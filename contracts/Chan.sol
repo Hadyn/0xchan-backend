@@ -1,4 +1,5 @@
 pragma solidity ^0.6.1;
+pragma experimental ABIEncoderV2;
 
 library IPFS {
 
@@ -144,7 +145,7 @@ contract ChanAnnouncements {
     /**
      * All of the announcements that were committed.
      */
-    mapping(uint256 => Announcement) internal announcements;
+    mapping(uint256 => Announcement) public announcements;
 
     /**
      * The number of announcements that have been made.
@@ -218,11 +219,11 @@ contract ChanAnnouncements {
      * Publishes an announcement. In order to publish an announcement the message sender must be either an owner or
      * whitelisted to be an announcer.
      */
-    function publishAnnouncement(bytes memory data)
+    function publishAnnouncement(bytes memory multihash)
         public
         isAnnouncer
     {
-        bytes memory multihash = IPFS.extractRawMultiHash(data);
+        multihash = IPFS.extractRawMultiHash(multihash);
 
         address author = msg.sender;
         uint timestamp = block.timestamp;
@@ -231,39 +232,277 @@ contract ChanAnnouncements {
         announcements[announcementID] = Announcement(author, multihash, timestamp);
         announcementCount += 1;
 
-        emit AnnouncementPublished(author, data, timestamp);
+        emit AnnouncementPublished(author, multihash, timestamp);
     }
 
     /**
-     * Retrieves an announcement. This will extract the fields from the announcement struct stored internally in the
-     * contract into a tuple.
-     */
-    function getAnnouncement(uint id)
-        public
-        view
-        returns (address author, bytes memory multihash, uint timestamp)
-    {
-        require(id > 0 && id <= announcementCount, "Bad ID");
-
-        Announcement memory announcement = announcements[id];
-
-        // Extract all the fields out of the announcement.
-        return (
-            announcement.author,
-            announcement.multihash,
-            announcement.timestamp
-        );
-    }
-
-    /**
-     * Retrieves the latest announcement. This will extract the fields from the announcement struct stored internally
-     * in the contract into a tuple.
+     * Retrieves the latest announcement.
      */
     function getLatestAnnouncement()
         public
         view
-        returns (address author, bytes memory multihash, uint timestamp)
+        returns (Announcement memory)
     {
-        return getAnnouncement(announcementCount);
+        return announcements[announcementCount];
+    }
+}
+
+/**
+ * A contract which contains all of the boards, threads, and posts.
+ */
+contract ChanBoards {
+
+    /**
+     * A numeric constant used for NULL identifiers.
+     */
+    uint32 constant public NULL = 0;
+
+    /**
+     * A struct which represents a forum board.
+     */
+    struct Board {
+
+        /**
+         * The user which created the thread.
+         */
+        address creator;
+
+        /**
+         * The board code used for identifying the board.
+         */
+        bytes3 code;
+
+        /**
+         * The IPFS multihash which is used to derive the content identifier to access the board metadata.
+         */
+        bytes multihash;
+    }
+
+    /**
+     * A struct which represents a post made to a board.
+     */
+    struct Post {
+
+        /**
+         * The user which authored the post.
+         */
+        address author;
+
+        /**
+         * The board which the post belongs to.
+         */
+        uint32 boardID;
+
+        /**
+         * The thread which is the parent of this post.
+         */
+        uint32 threadID;
+
+        /**
+         * The IPFS multihash which is used to derive the content identifier to access the post text.
+         */
+        bytes multihash;
+    }
+
+    /**
+     * An event which is emitted when a new board is created.
+     */
+    event BoardCreated(address indexed creator, uint32 boardID, bytes3 code, bytes multihash);
+
+    /**
+     * An event which is emitted when a post is published. If the postID and threadID are the same then the post
+     * is the start of a thread.
+     */
+    event PostPublished(
+        address indexed author,
+        uint32  indexed boardID,
+        uint32  indexed threadID,
+        uint32          postID,
+        bytes           multihash
+    );
+
+    /**
+     * All of the boards that exist mapped by their identifier.
+     */
+    mapping(uint32 => Board) public boards;
+
+    /**
+     * The number of boards that currently exist.
+     */
+    uint32 public boardCount;
+
+    /**
+     * A set of all of the board codes that have been claimed.
+     */
+    mapping(bytes3 => bool) public claimedBoardCodes;
+
+    /**
+     * All of the threads mapped first by board and then in order by which they were posted according to the number of
+     * threads in the board.
+     */
+    mapping(uint32 => mapping(uint32 => uint32)) public boardThreads;
+
+    /**
+     * The number of threads that each board has.
+     */
+    mapping(uint32 => uint32) public boardThreadCounts;
+
+    /**
+     * The number of posts that currently exist by board.
+     */
+    mapping(uint32 => uint32) public boardPostCount;
+
+    /**
+     * All of the posts that exist mapped by board and then mapping by identifier.
+     */
+    mapping(uint32 => mapping(uint32 => Post)) public boardPosts;
+
+    /**
+     * All of the thread posts mapped first by board, then by the post which is the head of the thread, and finally by
+     * order at which the posts were appended.
+     */
+    mapping(uint32 => mapping(uint32 => mapping(uint32 => uint32))) public boardThreadPosts;
+
+    /**
+     * The number of posts that the threads in a board currently has.
+     */
+    mapping(uint32 => mapping(uint32 => uint32)) public boardThreadPostCount;
+
+    /**
+     * Creates a new board.
+     */
+    function createBoard(bytes3 code, bytes memory multihash)
+        public
+        returns (uint32 boardID)
+    {
+        require(!claimedBoardCodes[code], "Board code already claimed");
+
+        address creator = msg.sender;
+        multihash = IPFS.extractRawMultiHash(multihash);
+
+        boardID = boardCount + 1;
+        boards[boardID] = Board(creator, code, multihash);
+        boardCount += 1;
+
+        claimedBoardCodes[code] = true;
+
+        emit BoardCreated(creator, boardID, code, multihash);
+
+        return boardID;
+    }
+
+    /**
+     * Publishes a post. If the parentID is set to NULL then the post will be the first post in a thread, otherwise the
+     * post will be appended to a thread. The boardID can be set to NULL if publishing a post to a thread.
+     */
+    function publishPost(uint32 boardID, uint32 threadID, bytes memory multihash)
+        public
+        returns (uint32 postID)
+    {
+        require(boardID > 0 && boardID <= boardCount, "Board does not exist");
+
+        if (threadID != NULL) {
+            require(boardThreadPostCount[boardID][threadID] > 0, "Specified post is not a thread");
+        }
+
+        address author = msg.sender;
+        multihash = IPFS.extractRawMultiHash(multihash);
+
+        // Assign the post an identifier.
+        postID = boardPostCount[boardID] + 1;
+
+        // Create the thread if its new and append the thread to the board threads.
+        if (threadID == NULL) {
+            threadID = boardThreadCounts[boardID] + 1;
+            boardThreadCounts[boardID] += 1;
+        }
+
+        // Create and write the post.
+        boardPosts[boardID][postID] = Post(author, boardID, threadID, multihash);
+        boardPostCount[boardID] += 1;
+
+        // Append the post to the thread.
+        uint32 threadPostID = boardThreadPostCount[boardID][threadID] + 1;
+        boardThreadPosts[boardID][threadID][threadPostID] = postID;
+        boardThreadPostCount[boardID][threadID] += 1;
+
+        emit PostPublished(author, boardID, threadID, postID, multihash);
+
+        return postID;
+    }
+
+    /**
+     * Lists boards.
+     */
+    function listBoards(uint32 cursor, uint32 limit)
+        public
+        view
+        returns (Board[] memory items, uint32 newCursor)
+    {
+        require(cursor > 0, "Bad cursor");
+        require(limit > 0, "Bad limit");
+
+        if (cursor + limit - 1 > boardCount) {
+            limit = boardCount - cursor + 1;
+        }
+
+        items = new Board[](limit);
+
+        for (uint32 i = 0; i < limit; i++) {
+            items[i] = boards[cursor + i];
+        }
+
+        return (items, cursor + limit);
+    }
+
+    /**
+     * Lists threads in a board.
+     */
+    function listThreads(uint32 boardID, uint32 cursor, uint32 limit)
+        public
+        view
+        returns (uint32[] memory items, uint32 newCursor)
+    {
+        require(cursor > 0, "Bad cursor");
+        require(boardID > 0 && boardID <= boardCount, "Board does not exist");
+        require(limit > 0, "Bad limit");
+
+        if (cursor + limit - 1 > boardThreadCounts[boardID]) {
+            limit = boardThreadCounts[boardID] - cursor + 1;
+        }
+
+        items = new uint32[](limit);
+
+        for (uint32 i = 0; i < limit; i++) {
+            items[i] = boardThreads[boardID][i];
+        }
+
+        return (items, cursor + limit);
+    }
+
+    /**
+     * Lists posts that belong to a board thread.
+     */
+    function listThreadPosts(uint32 boardID, uint32 threadID, uint32 cursor, uint32 limit)
+        public
+        view
+        returns (Post[] memory items, uint32 newCursor)
+    {
+        require(cursor > 0, "Bad cursor");
+        require(boardID > 0 && boardID <= boardCount, "Board does not exist");
+        require(boardThreadPostCount[boardID][threadID] > 0, "Thread does not exist");
+        require(limit > 0, "Bad limit");
+
+        if (cursor + limit - 1 > boardThreadPostCount[boardID][threadID]) {
+            limit = boardThreadPostCount[boardID][threadID] - cursor + 1;
+        }
+
+        items = new Post[](limit);
+
+        for (uint32 i = 0; i < limit; i++) {
+            items[i] = boardPosts[boardID][boardThreadPosts[boardID][threadID][cursor + i]];
+        }
+
+        return (items, cursor + limit);
     }
 }

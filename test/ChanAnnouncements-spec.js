@@ -107,7 +107,7 @@ contract("ChanAnnouncements", function () {
   });
 
   it("should fetch announcements", async function() {
-    const announcement = await ChanAnnouncements.methods.getAnnouncement(1).call();
+    const announcement = await ChanAnnouncements.methods.announcements(1).call();
     assert.strictEqual(announcement.author, accounts[2]);
     assert.strictEqual(announcement.multihash, "0x000100");
     assert.strictEqual(announcement.timestamp, "5");
