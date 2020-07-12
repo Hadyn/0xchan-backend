@@ -1,18 +1,30 @@
 {
-  "name": "0xchan",
-  "version": "0.0.1",
-  "description": "",
-  "scripts": {
-    "test": "embark test"
-  },
-  "keywords": [],
-  "author": "",
+  "name": "0xchan-backend",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "Anonymous",
   "license": "MIT",
   "devDependencies": {
-    "embark": "^6.0.0",
-    "embark-geth": "^6.0.0",
-    "embarkjs": "^6.0.0",
-    "embarkjs-ens": "^6.0.0",
-    "embarkjs-web3": "^6.0.0"
+    "@nomiclabs/buidler": "^1.3.8",
+    "@nomiclabs/buidler-ethers": "^2.0.0",
+    "@nomiclabs/buidler-waffle": "^2.0.0",
+    "@openzeppelin/contracts": "^3.1.0",
+    "@openzeppelin/test-helpers": "^0.5.6",
+    "@typechain/ethers-v5": "^0.0.2",
+    "@types/chai": "^4.2.11",
+    "@types/mocha": "^7.0.2",
+    "@types/node": "^14.0.20",
+    "chai": "^4.2.0",
+    "ethereum-waffle": "^3.0.1",
+    "ethers": "^5.0.5",
+    "mocha": "^8.0.1",
+    "ts-node": "^8.10.2",
+    "typechain": "^2.0.0",
+    "typechain-target-ethers": "^1.0.4",
+    "typescript": "^3.9.6"
+  },
+  "scripts": {
+    "build": "npx buidler compile && typechain --target=ethers-v5 \"./artifacts/*.json\"",
+    "test": "npx buidler test"
   }
 }

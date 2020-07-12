@@ -1,9 +1,11 @@
-.embark
-chains.json
-config/livenet/password
-config/production/password
-coverage
-dist
-embarkArtifacts
 node_modules
+
+#Buidler files
+cache
+artifacts
+
+#Typechain files
+types
+
+#WebStorm
 .idea
