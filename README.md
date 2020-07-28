@@ -1,6 +1,6 @@
 # chan-backend
 
-## Build
+## Building
 
 0xchan-backend relies on building TypeChain definitions of all the contracts for testing. To compile the contracts and create the TypeChain definitions, run:
 
