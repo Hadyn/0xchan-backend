@@ -12,4 +12,10 @@ task("accounts", "Prints the list of accounts", async (taskArgs, bre) => {
     }
 });
 
+// This is a sample Buidler task. To learn how to create your own go to
+// https://buidler.dev/guides/create-task.html
+task("deploy", "Deploys stuffs", async (taskArgs, bre) => {
+    
+});
+
 export default {};
