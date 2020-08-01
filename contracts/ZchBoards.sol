@@ -82,7 +82,7 @@ contract ZchBoards {
     /**
      * The function selector for the deposit function of the funds recipient.
      */
-    bytes4 private DEPOSIT_SELECTOR = bytes4(keccak256(abi.encodePacked("deposit(bytes4)")));
+    bytes4 constant private DEPOSIT_SELECTOR = bytes4(keccak256(abi.encodePacked("deposit(bytes4)")));
 
     /**
      * A struct which represents a forum board.
@@ -189,17 +189,17 @@ contract ZchBoards {
     /**
      * An event which is emitted when a new board is created.
      */
-    event BoardCreated(address indexed creator, uint32 boardID, bytes4 code, bytes32 hash);
+    event BoardCreated(address indexed creator, uint256 boardID, bytes4 code, bytes32 hash);
 
     /**
      * An event which is emitted when a post is published to a thread.
      */
     event PostPublished(
         address indexed author,
-        uint32  indexed boardID,
-        uint32  indexed threadID,
-        uint32          postID,
-        uint16          ordinal,
+        uint256 indexed boardID,
+        uint256 indexed threadID,
+        uint256         postID,
+        uint256         ordinal,
         bytes32         txtHash,
         bytes32         imgHash
     );
@@ -227,47 +227,47 @@ contract ZchBoards {
     /**
      * The maximum amount of ethereum that a user can stake in wei.
      */
-    uint256 public maximumStake;
+    uint256 public maximumStake = DEFAULT_MAXIMUM_STAKE;
 
     /**
      * The minimum amount of ethereum that a user must have staked in order to post.
      */
-    uint256 public postTxtStakeMinimum;
+    uint256 public postTxtStakeMinimum = DEFAULT_POST_TXT_STAKE_MINIMUM;
 
     /**
      * The minimum amount of ethereum that a user must have staked in order to add attachments to posts.
      */
-    uint256 public postImgStakeMinimum;
+    uint256 public postImgStakeMinimum = DEFAULT_POST_IMG_STAKE_MINIMUM;
 
     /**
      * The price of creating a board in wei.
      */
-    uint256 public createBoardPriceWei;
+    uint256 public createBoardPriceWei = DEFAULT_CREATE_BOARD_PRICE_WEI;
 
     /**
      * The price of creating a board in ZCH.
      */
-    uint256 public createBoardPriceZch;
+    uint256 public createBoardPriceZch = DEFAULT_CREATE_BOARD_PRICE_ZCH;
 
     /**
      * The price of publishing a post in wei.
      */
-    uint256 public publishPostPriceWei;
+    uint256 public publishPostPriceWei = DEFAULT_PUBLISH_POST_PRICE_WEI;
 
     /**
      * The price of publishing a post in ZCH.
      */
-    uint256 public publishPostPriceZch;
+    uint256 public publishPostPriceZch = DEFAULT_PUBLISH_POST_PRICE_ZCH;
 
     /**
      * All of the boards that exist mapped by their identifier.
      */
-    mapping(uint32 => Board) public boards;
+    mapping(uint256 => Board) public boards;
 
     /**
      * The number of boards that currently exist.
      */
-    uint32 public boardCount;
+    uint256 public boardCount;
 
     /**
      * A set of all of the board codes that have been claimed.
@@ -277,33 +277,33 @@ contract ZchBoards {
     /**
      * All of the posts that exist mapped by board and then mapped by identifier.
      */
-    mapping(uint32 => mapping(uint32 => Post)) public boardPosts;
+    mapping(uint256 => mapping(uint256 => Post)) public boardPosts;
 
     /**
      * The number of posts that currently exist by board.
      */
-    mapping(uint32 => uint32) public boardPostCount;
+    mapping(uint256 => uint256) public boardPostCount;
 
     /**
      * All of the threads that exist mapped by board and then mapped by identifier.
      */
-    mapping(uint32 => mapping(uint32 => Thread)) public boardThreads;
+    mapping(uint256 => mapping(uint256 => Thread)) public boardThreads;
 
     /**
      * The number of threads that each board has.
      */
-    mapping(uint32 => uint32) public boardThreadCounts;
+    mapping(uint256 => uint256) public boardThreadCounts;
 
     /**
      * All of the thread posts mapped first by board, then by thread, and finally by order at which the posts were
      * appended.
      */
-    mapping(uint32 => mapping(uint32 => mapping(uint16 => uint32))) public boardThreadPosts;
+    mapping(uint256 => mapping(uint256 => mapping(uint256 => uint256))) public boardThreadPosts;
 
     /**
      * The current thread for each board that is the most recently updated or leader.
      */
-    mapping(uint32 => uint32) public boardLeadingThread;
+    mapping(uint256 => uint256) public boardLeadingThread;
 
     /**
      * The amount of ethereum that each account currently has staked in wei.
@@ -321,13 +321,6 @@ contract ZchBoards {
     constructor(address _tokenAddress) public {
         _zchToken = IERC20(_tokenAddress);
         _fundsRecipient = IFundsRecipient(_tokenAddress);
-        maximumStake = DEFAULT_MAXIMUM_STAKE;
-        postTxtStakeMinimum = DEFAULT_POST_TXT_STAKE_MINIMUM;
-        postImgStakeMinimum = DEFAULT_POST_IMG_STAKE_MINIMUM;
-        createBoardPriceWei = DEFAULT_CREATE_BOARD_PRICE_WEI;
-        createBoardPriceZch = DEFAULT_CREATE_BOARD_PRICE_ZCH;
-        publishPostPriceWei = DEFAULT_PUBLISH_POST_PRICE_WEI;
-        publishPostPriceZch = DEFAULT_PUBLISH_POST_PRICE_ZCH;
     }
 
     /**
@@ -347,7 +340,7 @@ contract ZchBoards {
         require(validateBoardCode(code), "Invalid board code");
         require(!claimedBoardCodes[code], "Board code already claimed");
 
-        uint32 boardID = boardCount + 1;
+        uint256 boardID = boardCount + 1;
         boards[boardID] = Board(creator, code, hash);
         boardCount += 1;
 
@@ -362,7 +355,7 @@ contract ZchBoards {
      * Publishes a post. If the threadID is set to NULL then the post will be the first post in a newly created thread,
      * otherwise the post will be appended to a thread.
      */
-    function publishPost(uint32 boardID, uint32 threadID, bytes32 txtHash, bytes32 imgHash)
+    function publishPost(uint256 boardID, uint256 threadID, bytes32 txtHash, bytes32 imgHash)
         public
         payable
     {
@@ -388,15 +381,19 @@ contract ZchBoards {
             boardThreadCounts[boardID] += 1;
         }
 
-        uint32 postID = boardPostCount[boardID] + 1;
-        boardPosts[boardID][postID] = Post(author, boardID, threadID, txtHash, imgHash);
+        uint256 postID = boardPostCount[boardID] + 1;
+        boardPosts[boardID][postID].author = author;
+        boardPosts[boardID][postID].boardID = uint32(boardID);
+        boardPosts[boardID][postID].threadID = uint32(threadID);
+        boardPosts[boardID][postID].txtHash = txtHash;
+        boardPosts[boardID][postID].imgHash = imgHash;
         boardPostCount[boardID] += 1;
 
-        uint16 ordinal = thread.postCount + 1;
+        uint256 ordinal = thread.postCount + 1;
         thread.postCount  += 1;
 
         // Update the board leader if needed.
-        uint32 currentLeadingThread = boardLeadingThread[boardID];
+        uint256 currentLeadingThread = boardLeadingThread[boardID];
         if (currentLeadingThread != threadID && thread.postCount < THREAD_POST_BUMP_LIMIT) {
             // Relink the previous node's next node.
             if (thread.prevThreadID != NULL_ID) {
@@ -410,11 +407,11 @@ contract ZchBoards {
 
             // Relink the leading thread's previous node.
             if (currentLeadingThread != NULL_ID) {
-                boardThreads[boardID][currentLeadingThread].prevThreadID = threadID;
+                boardThreads[boardID][currentLeadingThread].prevThreadID = uint32(threadID);
             }
 
             thread.prevThreadID = NULL_ID;
-            thread.nextThreadID = currentLeadingThread;
+            thread.nextThreadID = uint32(currentLeadingThread);
 
             boardLeadingThread[boardID] = threadID;
         }
@@ -497,10 +494,10 @@ contract ZchBoards {
     /**
      * Lists boards.
      */
-    function listBoards(uint32 cursor, uint32 limit)
+    function listBoards(uint256 cursor, uint256 limit)
         public
         view
-        returns (Board[] memory items, uint32 newCursor)
+        returns (Board[] memory items, uint256 newCursor)
     {
         require(cursor > 0, "Bad cursor");
         require(limit > 0, "Bad limit");
@@ -521,10 +518,10 @@ contract ZchBoards {
     /**
      * Lists all of the threads from a cursor onward ordered descending by most recent activity.
      */
-    function listThreadsByActivity(uint32 boardID, uint32 cursor, uint32 limit)
+    function listThreadsByActivity(uint256 boardID, uint256 cursor, uint256 limit)
         public
         view
-        returns (ThreadWithID[] memory items, uint32 newCursor)
+        returns (ThreadWithID[] memory items, uint256 newCursor)
     {
         require(boardID > 0 && boardID <= boardCount, "Board does not exist");
 
@@ -543,7 +540,8 @@ contract ZchBoards {
         uint32 i = 0;
         while (cursor != NULL_ID && i < limit) {
             Thread memory thread = boardThreads[boardID][cursor];
-            items[i] = ThreadWithID(cursor, thread);
+            items[i].id     = uint32(cursor);
+            items[i].thread = thread;
             cursor = thread.nextThreadID;
             i += 1;
         }
@@ -554,10 +552,10 @@ contract ZchBoards {
     /**
      * Lists posts that belong to a board thread.
      */
-    function listThreadPosts(uint32 boardID, uint32 threadID, uint16 cursor, uint16 limit)
+    function listThreadPosts(uint256 boardID, uint256 threadID, uint256 cursor, uint256 limit)
         public
         view
-        returns (PostWithID[] memory items, uint16 newCursor)
+        returns (PostWithID[] memory items, uint256 newCursor)
     {
         require(cursor > 0, "Bad cursor");
         require(boardID > 0 && boardID <= boardCount, "Board does not exist");
@@ -573,8 +571,9 @@ contract ZchBoards {
         items = new PostWithID[](limit);
 
         for (uint16 i = 0; i < limit; i++) {
-            uint32 postID = boardThreadPosts[boardID][threadID][cursor + i];
-            items[i] = PostWithID(postID, boardPosts[boardID][postID]);
+            uint256 postID = boardThreadPosts[boardID][threadID][cursor + i];
+            items[i].id    = uint32(postID);
+            items[i].post  = boardPosts[boardID][postID];
         }
 
         return (items, cursor + limit);
